@@ -1,0 +1,203 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Life Conversation Data Types",
+  "description": "Shared conversation schema for ASR, NLP, and conversation analysis across the Ushadow ecosystem",
+  "version": "1.0.0",
+  "definitions": {
+    "Segment": {
+      "type": "object",
+      "title": "Segment",
+      "description": "A contiguous transcribed text from a speaker with timing metadata",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this segment"
+        },
+        "text": {
+          "type": "string",
+          "description": "Transcribed text content"
+        },
+        "speaker": {
+          "type": "string",
+          "description": "Speaker identifier or name"
+        },
+        "start": {
+          "type": "number",
+          "description": "Start time in seconds"
+        },
+        "end": {
+          "type": "number",
+          "description": "End time in seconds"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "ASR confidence score (0-1)"
+        },
+        "language": {
+          "type": "string",
+          "description": "Language code (e.g., 'en', 'es', 'fr')"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Provider-specific extensions (Deepgram, Whisper, etc.)"
+        }
+      },
+      "required": ["id", "text", "speaker", "start", "end"],
+      "additionalProperties": false
+    },
+    "Fragment": {
+      "type": "object",
+      "title": "Fragment",
+      "description": "A semantic unit within a segment (e.g., sentence, clause, turn)",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this fragment"
+        },
+        "text": {
+          "type": "string",
+          "description": "Fragment text content"
+        },
+        "segmentId": {
+          "type": "string",
+          "description": "Reference to parent segment ID"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["sentence", "clause", "turn", "utterance", "other"],
+          "description": "Fragment classification"
+        },
+        "start": {
+          "type": "number",
+          "description": "Start time in seconds (inherited from segment)"
+        },
+        "end": {
+          "type": "number",
+          "description": "End time in seconds (inherited from segment)"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Fragment-specific metadata (NLP annotations, sentiment, etc.)"
+        }
+      },
+      "required": ["id", "text", "segmentId", "type"],
+      "additionalProperties": false
+    },
+    "Thread": {
+      "type": "object",
+      "title": "Thread",
+      "description": "A topical or narrative thread spanning multiple fragments",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this thread"
+        },
+        "title": {
+          "type": "string",
+          "description": "Thread title or topic"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the thread content"
+        },
+        "fragmentIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered list of fragment IDs in this thread"
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Speakers involved in this thread"
+        },
+        "startTime": {
+          "type": "number",
+          "description": "Thread start time (seconds)"
+        },
+        "endTime": {
+          "type": "number",
+          "description": "Thread end time (seconds)"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Thread-specific metadata (topic tags, sentiment, importance)"
+        }
+      },
+      "required": ["id", "title", "fragmentIds"],
+      "additionalProperties": false
+    },
+    "Conversation": {
+      "type": "object",
+      "title": "Conversation",
+      "description": "Complete conversation with segments, fragments, and threads",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this conversation"
+        },
+        "title": {
+          "type": "string",
+          "description": "Conversation title or meeting name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Conversation summary or description"
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of all participant identifiers"
+        },
+        "startTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Conversation start timestamp (ISO 8601)"
+        },
+        "endTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Conversation end timestamp (ISO 8601)"
+        },
+        "duration": {
+          "type": "number",
+          "description": "Total duration in seconds"
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Segment"
+          },
+          "description": "All segments in this conversation"
+        },
+        "fragments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Fragment"
+          },
+          "description": "All fragments in this conversation"
+        },
+        "threads": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Thread"
+          },
+          "description": "All threads in this conversation"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Conversation-level metadata (source, quality, tags)"
+        }
+      },
+      "required": ["id", "title", "participants", "startTime", "segments"],
+      "additionalProperties": false
+    }
+  }
+}

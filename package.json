@@ -1,0 +1,36 @@
+{
+  "name": "life-datatypes",
+  "version": "1.0.0",
+  "description": "Shared conversation data types for the Ushadow ecosystem",
+  "main": "generated/typescript/index.ts",
+  "types": "generated/typescript/index.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ushadow-io/life-datatypes.git"
+  },
+  "scripts": {
+    "codegen": "npm run codegen:typescript",
+    "codegen:typescript": "node scripts/codegen-typescript.js",
+    "codegen:python": "python scripts/codegen-python.py",
+    "build": "npm run codegen",
+    "test": "echo 'No tests yet'",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "conversation",
+    "asr",
+    "nlp",
+    "data-types",
+    "schema",
+    "ushadow"
+  ],
+  "author": "Ushadow Contributors",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ushadow-io/life-datatypes/issues"
+  },
+  "homepage": "https://github.com/ushadow-io/life-datatypes#readme",
+  "devDependencies": {
+    "json-schema-to-typescript": "^13.1.0"
+  }
+}

@@ -1,0 +1,17 @@
+node_modules/
+*.egg-info/
+__pycache__/
+dist/
+build/
+*.pyc
+.DS_Store
+.env
+.env.local
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+generated/typescript/*.ts
+generated/python/**/*.py
+!examples/
