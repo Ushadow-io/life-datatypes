@@ -1,11 +1,17 @@
 /**
- * Example: Parse a conversation from transcribed data using life-datatypes
+ * Example: Build a conversation from segments, fragments, and threads using life-datatypes
+ *
+ * Hierarchy:
+ * - Segments: Atomic timeline units (speaker lines, delimited by speaker change/pause)
+ * - Fragments: Consecutive segments grouped by topic (discussion of one subject)
+ * - Threads: Non-consecutive fragments grouped by broader topic (meta-themes)
  */
 
 import { Segment, Fragment, Thread, Conversation } from '../generated/typescript'
 import { randomUUID } from 'crypto'
 
-// Create segments from ASR output
+// Create segments from ASR output (chronological order)
+// Each segment is a line of dialog (speaker change or pause boundary)
 const segments: Segment[] = [
   {
     id: randomUUID(),
@@ -25,33 +31,42 @@ const segments: Segment[] = [
     confidence: 0.96,
     language: 'en',
   },
+  {
+    id: randomUUID(),
+    text: 'I wanted to discuss the quarterly budget.',
+    speaker: 'alice',
+    start: 6.0,
+    end: 8.5,
+    confidence: 0.94,
+    language: 'en',
+  },
 ]
 
-// Create fragments (semantic units)
+// Create fragments: consecutive segments with same topic
 const fragments: Fragment[] = [
   {
     id: randomUUID(),
-    text: 'Hello, how are you today?',
-    segmentId: segments[0].id,
+    text: "Hello, how are you today? I'm doing great, thanks for asking.",
+    segmentIds: [segments[0].id, segments[1].id],  // Consecutive greeting exchange
     type: 'utterance',
-    metadata: { intent: 'greeting' },
+    metadata: { topic: 'greeting' },
   },
   {
     id: randomUUID(),
-    text: "I'm doing great, thanks for asking.",
-    segmentId: segments[1].id,
+    text: 'I wanted to discuss the quarterly budget.',
+    segmentIds: [segments[2].id],  // Budget discussion starts
     type: 'utterance',
-    metadata: { sentiment: 'positive' },
+    metadata: { topic: 'budget' },
   },
 ]
 
-// Create threads (topical coherence)
+// Create threads: fragments grouped by broader topic (can be non-consecutive)
 const threads: Thread[] = [
   {
     id: randomUUID(),
-    title: 'Opening Greeting',
-    description: 'Initial pleasantries and greeting exchange',
-    fragmentIds: [fragments[0].id, fragments[1].id],
+    title: 'Opening Ceremony',
+    description: 'Initial greeting and pleasantries',
+    fragmentIds: [fragments[0].id],
     participants: ['alice', 'bob'],
     startTime: 0.0,
     endTime: 5.2,
@@ -61,15 +76,15 @@ const threads: Thread[] = [
 // Assemble the full conversation
 const conversation: Conversation = {
   id: randomUUID(),
-  title: 'Alice and Bob Conversation',
-  description: 'A simple greeting conversation',
+  title: 'Alice and Bob Meeting',
+  description: 'A meeting between Alice and Bob',
   participants: ['alice', 'bob'],
   startTime: new Date('2024-02-24T10:00:00Z').toISOString(),
-  endTime: new Date('2024-02-24T10:05:00Z').toISOString(),
-  duration: 300.0,
-  segments,
-  fragments,
-  threads,
+  endTime: new Date('2024-02-24T10:10:00Z').toISOString(),
+  duration: 600.0,
+  segments,  // Atomic timeline
+  fragments,  // Consecutive topic groupings
+  threads,  // Broader topic themes
   metadata: {
     source: 'deepgram',
     quality: 'high',

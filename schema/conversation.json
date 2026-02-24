@@ -50,7 +50,7 @@
     "Fragment": {
       "type": "object",
       "title": "Fragment",
-      "description": "A semantic unit within a segment (e.g., sentence, clause, turn)",
+      "description": "A topic-linked group of consecutive segments (e.g., discussion of a specific subject). Must reference adjacent segments in timeline.",
       "properties": {
         "id": {
           "type": "string",
@@ -58,11 +58,14 @@
         },
         "text": {
           "type": "string",
-          "description": "Fragment text content"
+          "description": "Fragment text content (combined from consecutive segments)"
         },
-        "segmentId": {
-          "type": "string",
-          "description": "Reference to parent segment ID"
+        "segmentIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "References to consecutive segment IDs in this fragment (must be adjacent in the timeline)"
         },
         "type": {
           "type": "string",
@@ -71,18 +74,18 @@
         },
         "start": {
           "type": "number",
-          "description": "Start time in seconds (inherited from segment)"
+          "description": "Start time in seconds (from first segment)"
         },
         "end": {
           "type": "number",
-          "description": "End time in seconds (inherited from segment)"
+          "description": "End time in seconds (from last segment)"
         },
         "metadata": {
           "type": "object",
-          "description": "Fragment-specific metadata (NLP annotations, sentiment, etc.)"
+          "description": "Fragment-specific metadata (topic tags, sentiment, etc.)"
         }
       },
-      "required": ["id", "text", "segmentId", "type"],
+      "required": ["id", "text", "segmentIds", "type"],
       "additionalProperties": false
     },
     "Thread": {
@@ -135,7 +138,7 @@
     "Conversation": {
       "type": "object",
       "title": "Conversation",
-      "description": "Complete conversation with segments, fragments, and threads",
+      "description": "Time-bounded dialog with segments (atomic units), fragments (consecutive topic-linked segments), and threads (topic-grouped fragments)",
       "properties": {
         "id": {
           "type": "string",
@@ -175,21 +178,21 @@
           "items": {
             "$ref": "#/definitions/Segment"
           },
-          "description": "All segments in this conversation"
+          "description": "All segments in chronological order (atomic timeline units)"
         },
         "fragments": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/Fragment"
           },
-          "description": "All fragments in this conversation"
+          "description": "Topic-grouped collections of consecutive segments"
         },
         "threads": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/Thread"
           },
-          "description": "All threads in this conversation"
+          "description": "Broader topic groupings of fragments (may be non-consecutive)"
         },
         "metadata": {
           "type": "object",

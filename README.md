@@ -10,13 +10,16 @@ Shared conversation data types for ASR, NLP, and conversation analysis across th
 
 `life-datatypes` defines a unified conversation schema that bridges **Chronicle** (conversation storage), **Mycelia** (conversation analysis), and other services that work with transcribed conversations.
 
-The schema models conversations at multiple semantic levels:
+The schema models conversations at three hierarchical levels:
 
 ```
-Conversation
-├── Segments (transcribed utterances)
-├── Fragments (semantic units: sentences, clauses, turns)
-└── Threads (topical/narrative coherence)
+Conversation (time-bounded dialog with start/end)
+├── Segments (atomic timeline units, delimited by speaker/pause)
+│   └── Like lines in a screenplay
+├── Fragments (consecutive segments grouped by topic)
+│   └── Discussion of a specific subject within the timeline
+└── Threads (fragments grouped by broader theme)
+    └── Can be non-consecutive across the conversation
 ```
 
 ## Installation
@@ -135,38 +138,42 @@ Segment(
 ```
 
 ### Fragment
-A semantic unit within a segment (sentence, clause, turn, etc.).
+A topic-linked group of **consecutive** segments (e.g., discussion of a specific subject).
+
+Fragments must reference adjacent segments in the chronological timeline.
 
 ```python
 Fragment(
     id: str                    # Unique identifier
-    text: str                  # Fragment text
-    segmentId: str             # Reference to parent segment
+    text: str                  # Fragment text (combined from consecutive segments)
+    segmentIds: list[str]      # References to consecutive segment IDs (must be adjacent)
     type: str                  # 'sentence' | 'clause' | 'turn' | 'utterance' | 'other'
-    start: float               # Start time (optional, inherited from segment)
-    end: float                 # End time (optional, inherited from segment)
-    metadata: dict             # NLP annotations, sentiment, intent, etc.
+    start: float               # Start time (from first segment)
+    end: float                 # End time (from last segment)
+    metadata: dict             # Fragment-specific metadata
 )
 ```
 
 ### Thread
-A topical or narrative thread spanning multiple fragments.
+A broader topic grouping of fragments across the conversation.
+
+Unlike fragments (which are consecutive), threads can span **non-consecutive fragments**. For example, a "budget" thread might include fragments scattered throughout the conversation.
 
 ```python
 Thread(
     id: str                    # Unique identifier
     title: str                 # Thread title/topic
     description: str           # Detailed description
-    fragmentIds: list[str]     # Ordered fragment IDs
-    participants: list[str]    # Speakers in this thread
-    startTime: float           # Thread start (seconds)
-    endTime: float             # Thread end (seconds)
+    fragmentIds: list[str]     # Fragment IDs (can be non-consecutive)
+    participants: list[str]    # Speakers involved
+    startTime: float           # Earliest fragment start (seconds)
+    endTime: float             # Latest fragment end (seconds)
     metadata: dict             # Tags, sentiment, importance, etc.
 )
 ```
 
 ### Conversation
-The complete conversation with all levels of abstraction.
+The complete conversation with all three levels: segments (atomic timeline), fragments (consecutive topic groupings), and threads (broader themes).
 
 ```python
 Conversation(
@@ -177,22 +184,31 @@ Conversation(
     startTime: str             # ISO 8601 timestamp
     endTime: str               # ISO 8601 timestamp
     duration: float            # Total duration (seconds)
-    segments: list[Segment]    # All transcribed segments
-    fragments: list[Fragment]  # All semantic fragments
-    threads: list[Thread]      # All topical threads
-    metadata: dict             # Conversation metadata
+    segments: list[Segment]    # All segments (chronological order)
+    fragments: list[Fragment]  # Topic-grouped consecutive segments
+    threads: list[Thread]      # Broader topic groupings
+    metadata: dict             # Conversation-level metadata
 )
 ```
 
 ## Schema Design
 
-The schema is language-agnostic and version-stable:
+The schema is language-agnostic, hierarchical, and version-stable:
 
 - **Single source of truth**: `schema/conversation.json` (JSON Schema Draft 7)
 - **Type generation**: Automatically generated from schema for Python (Pydantic) and TypeScript
+- **Three-level hierarchy**: Segments (atomic) → Fragments (consecutive topic grouping) → Threads (broader themes)
 - **Extensibility**: `metadata` fields on every type allow provider-specific extensions
 - **Validation**: Built-in validation in generated Pydantic models
-- **No collections wrappers**: Arrays are first-class; use `metadata` for collection-level stats
+
+### Design Decisions
+
+**Three Levels:**
+- **Segments**: Delimited by speaker change or pause — atomic timeline units (like screenplay lines)
+- **Fragments**: Consecutive segments linked by topic — local coherence within timeline
+- **Threads**: Fragments linked by broader theme — can be scattered across conversation (non-consecutive)
+
+This mirrors real conversation dynamics: you discuss budget with interruptions for other topics, then return to budget later. Threads capture this pattern; fragments capture the contiguous bits.
 
 ## Contributing
 
