@@ -57,8 +57,8 @@ from life_datatypes import Segment, Fragment, Thread, Conversation
 from datetime import datetime
 from uuid import uuid4
 
-# Create a segment from ASR output
-segment = Segment(
+# Create segments from ASR output (chronological order)
+segment1 = Segment(
     id=str(uuid4()),
     text="Hello, how are you?",
     speaker="alice",
@@ -68,13 +68,34 @@ segment = Segment(
     language="en"
 )
 
-# Create a fragment (semantic unit)
+segment2 = Segment(
+    id=str(uuid4()),
+    text="I'm doing great!",
+    speaker="bob",
+    start=3.0,
+    end=4.5,
+    confidence=0.96,
+    language="en"
+)
+
+# Create a fragment (consecutive segments grouped by topic)
 fragment = Fragment(
     id=str(uuid4()),
-    text="Hello, how are you?",
-    segmentId=segment.id,
+    text="Hello, how are you? I'm doing great!",
+    segmentIds=[segment1.id, segment2.id],  # Consecutive segments
     type="utterance",
-    metadata={"intent": "greeting"}
+    metadata={"topic": "greeting"}
+)
+
+# Create a thread (fragments grouped by broader theme)
+thread = Thread(
+    id=str(uuid4()),
+    title="Opening Greetings",
+    description="Initial hello exchange",
+    fragmentIds=[fragment.id],
+    participants=["alice", "bob"],
+    startTime=0.0,
+    endTime=4.5
 )
 
 # Assemble into a conversation
@@ -83,8 +104,9 @@ conversation = Conversation(
     title="Meeting with Alice",
     participants=["alice", "bob"],
     startTime=datetime.now(),
-    segments=[segment],
-    fragments=[fragment]
+    segments=[segment1, segment2],
+    fragments=[fragment],
+    threads=[thread]
 )
 
 # Validate and serialize
