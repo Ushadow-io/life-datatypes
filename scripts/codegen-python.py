@@ -1,66 +1,61 @@
 #!/usr/bin/env python3
 """
-Generate Pydantic models from JSON Schema
-Run: python scripts/codegen-python.py
+Generate Pydantic v2 models from the JSON Schema.
+Run: python scripts/codegen-python.py   (needs datamodel-code-generator on PATH)
 """
 
-import json
+import ast
 import subprocess
 from pathlib import Path
 
-def generate_python():
-    schema_path = Path(__file__).parent.parent / "schema" / "conversation.json"
-    output_dir = Path(__file__).parent.parent / "generated" / "python"
-    output_file = output_dir / "life_datatypes" / "models.py"
+ROOT = Path(__file__).parent.parent
+SCHEMA = ROOT / "schema" / "conversation.json"
+PACKAGE = ROOT / "generated" / "python" / "life_datatypes"
+MODELS = PACKAGE / "models.py"
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+BANNER = (
+    '"""\n'
+    "Auto-generated from schema/conversation.json\n"
+    "DO NOT EDIT DIRECTLY\n"
+    "Run: python scripts/codegen-python.py\n"
+    '"""\n\n'
+)
 
-    # Create __init__.py
-    init_file = output_file.parent / "__init__.py"
-    init_file.write_text(
-        '"""Life Datatypes - Shared conversation schema models"""\n'
-        'from .models import Segment, Fragment, Thread, Conversation\n\n'
-        '__all__ = ["Segment", "Fragment", "Thread", "Conversation"]\n'
-    )
 
-    try:
-        cmd = [
-            "datamodel-code-generator",
-            "--input", str(schema_path),
-            "--output", str(output_file),
-            "--target-python-version", "3.10",
-            "--class-config", "ConfigDict(extra='forbid')",
-        ]
-
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        if result.returncode != 0:
-            print(f"❌ Python codegen failed: {result.stderr}")
-            return False
-
-        # Add banner comment
-        with open(output_file, 'r') as f:
-            content = f.read()
-
-        banner = (
-            '"""\n'
-            'Auto-generated from schema/conversation.json\n'
-            'DO NOT EDIT DIRECTLY\n'
-            'Run: python scripts/codegen-python.py\n'
-            '"""\n\n'
-        )
-
-        with open(output_file, 'w') as f:
-            f.write(banner + content)
-
-        print(f"✓ Generated {output_file}")
-        return True
-
-    except Exception as e:
-        print(f"❌ Python codegen error: {e}")
+def generate_python() -> bool:
+    PACKAGE.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "datamodel-codegen",
+        "--input", str(SCHEMA),
+        "--input-file-type", "jsonschema",
+        "--output", str(MODELS),
+        "--output-model-type", "pydantic_v2.BaseModel",
+        "--target-python-version", "3.10",
+        "--use-annotated",
+        "--field-constraints",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"❌ Python codegen failed: {result.stderr}")
         return False
 
+    MODELS.write_text(BANNER + MODELS.read_text())
+
+    # Export every generated class except the schema's unused root wrapper.
+    tree = ast.parse(MODELS.read_text())
+    names = [
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name != "LifeDataTypes"
+    ]
+    (PACKAGE / "__init__.py").write_text(
+        '"""Life Datatypes - shared capture and conversation schema models"""\n'
+        f"from .models import {', '.join(names)}\n\n"
+        f"__all__ = {names!r}\n"
+    )
+    print(f"✓ Generated {MODELS} ({len(names)} types)")
+    return True
+
+
 if __name__ == "__main__":
-    success = generate_python()
-    exit(0 if success else 1)
+    raise SystemExit(0 if generate_python() else 1)
