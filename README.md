@@ -62,9 +62,10 @@ at recording A, 08:55:06, with the quote.
 ### The names, from small to large
 
 ```
-CaptureBundle (one span, e.g. a local day)
+CaptureBundle (one span, e.g. a local day; ownerPersonId says whose)
 ├── CaptureSource        devices: pendant, phone, desktop
 ├── Recording            one continuous piece of audio, from cut to cut ("the tape")
+│   └── AudioRef         where the audio file is (uri, format); removable on its own
 ├── Transcript           one reading of a recording; a recording can have several
 │   ├── Speaker          a voice, with a label local to this recording, and a role
 │   └── Segment          one line of speech (atomic unit)
@@ -89,7 +90,7 @@ CaptureBundle (one span, e.g. a local day)
 | `Segment` | One line of speech | One speaker, until the speaker changes or pauses | Transcription |
 | `Speaker` | A voice on one tape | The label is local to the recording | Transcription |
 | `Recording` | The tape | From cut to cut. A cut is technical, not the end of a talk | Capture |
-| `Transcript` | One reading of the tape | Never overwritten. A better reading is a new revision | Transcription |
+| `Transcript` | One reading of the tape | Never overwritten. A better reading is a new revision. A `provisional` draft may change until a final one exists | Transcription |
 | `Fragment` | A scene | Consecutive speech, one subject, one recording | Model, checked by code |
 | `Thread` | A storyline | Fragments on one subject; they can be apart and in different recordings | Model |
 | `ConversationPart` | "This piece of the tape is ours" | One time range of one recording | Code, from Links |
@@ -106,6 +107,8 @@ CaptureBundle (one span, e.g. a local day)
 - Enum values are `snake_case` (`duplicate_of`).
 - A fact `key` is `snake_case`: a thing plus a past verb (`task_requested`, `promise_made`). It
   says what happened. It never names a status.
+- `status` is the draft/final state of one `Transcript` revision (`TranscriptStatus`). It is not
+  used for facts, links or conversations: those never carry a status, and a fact `key` never names one.
 - Use `Conversation`, `Recording` and `Fragment`. Do not add "episode", "session" or "chunk".
 
 ## Evidence is never overwritten
@@ -115,13 +118,18 @@ CaptureBundle (one span, e.g. a local day)
   they stay valid.
 - **A new transcript is a new `Transcript` revision.** `Recording.currentTranscriptRevision` says
   which one to use.
+- **A draft may change; a final one never does.** A live transcript has `status: provisional`
+  and grows while the recording is made. One provisional revision may be replaced in place until
+  a final revision (`status: final`, or `status` not set) of that recording exists. From then on
+  it is frozen, like every other revision.
 - **A human word fix is a `TranscriptCorrection`** on a time range. It applies to every revision.
 - **A decision is a `Link`, found by `key`.** To override one, add a Link whose `retracts` is the
   old id.
 - **A `Fact` has no status.** Whether it still counts is worked out from retractions and newer
   facts. This is the same shape as a taskfacts (`ushadow_facts`) fact.
 - **Erasing is the one exception.** When the user erases a range, the words are removed and a
-  `CaptureGap` with `cause: excluded` marks the range.
+  `CaptureGap` with `cause: excluded` and the `recordingId` marks the range. Erasing a whole
+  recording also removes `Recording.audio` (a pointer: the rest of the record stays).
 
 ## Edge cases the schema covers
 
@@ -134,6 +142,9 @@ CaptureBundle (one span, e.g. a local day)
 | A subject returns after an interruption | A `Thread` lists the non-consecutive fragments, which may come from different recordings of the conversation. |
 | "Speaker 0" is a different person in the next recording | `Speaker.label` is local to its recording. `Participant.speakerRefs` maps every label that is the same person; `personId` is set once someone is identified. |
 | TV, radio or a video is picked up by the microphone | `Speaker.role: media` (or `background` for nearby people not addressed). System audio uses `Recording.modality: audio_output`. |
+| A live transcript grows, then a final one replaces it | `Transcript.status: provisional` for the draft (one revision, replaced in place); a new revision with `status: final` (or not set) at the end. The draft is frozen once a final revision exists. |
+| Where the audio file is | `Recording.audio` (`AudioRef`: `uri`, `format`). The hash is `Recording.contentHash`. An erase removes `audio` and leaves the record. |
+| An erased range inside one recording | `CaptureGap` with `cause: excluded` and `recordingId`. A gap with no `recordingId` is between recordings. |
 | The same audio stored twice | `Recording.contentHash`, and a `Link` with `kind: duplicate_of`. |
 | Two devices captured the same moment | A `Link` with `kind: overlaps`. |
 | Audio downloaded later from device storage | `Recording.origin: recovered` (vs `live`, `upload`, `import`). |
@@ -163,7 +174,7 @@ Validators should enforce these in code:
 4. Every `SpeakerRef` points to a label that exists in a transcript of that recording.
 5. A `Thread`'s fragments belong to the conversation that contains the thread.
 6. Text is not copied upward: fragments and threads reference time ranges instead of repeating text. An `EvidenceRef.quote` is the one allowed copy.
-7. A `Transcript.revision` is unique within its recording. `Recording.currentTranscriptRevision` names one that exists.
+7. A `Transcript.revision` is unique within its recording. `Recording.currentTranscriptRevision` names one that exists. A recording has at most one `provisional` revision, and it is not changed once a `final` revision of the recording exists.
 8. A `Link` of kind `split_at` has `at` and no `toId`. Every other kind has `toId`.
 9. For one `Link.key`, the Link that counts is the newest one that no other Link retracts. A `human` Link is not retracted by a `rule` or `model` Link.
 10. A `Fact` with `source: agent` has at least one `value.evidence` entry.
@@ -203,6 +214,7 @@ npx -p typescript tsc --noEmit --strict examples/typescript/example_conversation
 - **Generated types:** Pydantic v2 models and TypeScript types are generated from it.
 - **References, not copies:** a `CaptureBundle` holds each item once; everything else refers to it by id.
 - **Named enums:** every enum is its own definition (`SpeakerRole`, `CutReason`, `LinkKind`, …), so generated code has stable names.
+- **Compatible growth:** new fields are optional and new types are new definitions, so documents that were valid stay valid. `ownerPersonId` uses the same id space as `Speaker.personId` and `Participant.personId`.
 - **Extensibility:** `metadata` on most types for provider-specific data. Unknown top-level fields are rejected.
 
 ## Contributing

@@ -11,6 +11,8 @@ It covers the cases the schema exists for:
 - a recording that changes subject without a pause (two Fragments)
 - a subject that returns after an interruption, across recordings (Thread)
 - screen activity during the conversation, and a time with no capture (CaptureGap)
+- a live transcript that is replaced by a final one (Transcript.status), where the audio is
+  stored (Recording.audio), and an erased range inside one recording (CaptureGap with recordingId)
 - facts taken from what was said, each with proof (Fact, EvidenceRef), and the entities they are about
 
 Run from the repository root:
@@ -20,6 +22,7 @@ Run from the repository root:
 from datetime import datetime, timezone
 
 from life_datatypes import (
+    AudioRef,
     CaptureBundle,
     CaptureGap,
     CaptureSource,
@@ -95,6 +98,7 @@ part_one = Recording(
     startReason="silence",
     endReason="file_boundary",
     contentHash="sha256:a913",
+    audio=AudioRef(uri="s3://example-bucket/audio/rec-a.opus", format="opus"),
     currentTranscriptRevision="rev-2",
 )
 part_one_speakers = [
@@ -158,9 +162,24 @@ part_two = Recording(
     contentHash="sha256:c04e",
     currentTranscriptRevision="rev-1",
 )
+# Live transcript, written while the recording was still going. It is provisional: it grows and may
+# be replaced in place, until the final revision below exists. After that it is frozen.
+part_two_live = Transcript(
+    recordingId="rec-b",
+    revision="live-1",
+    status="provisional",
+    createdAt=at("11:05:55"),
+    model="deepgram-nova-3-streaming",
+    speakers=[Speaker(label="Speaker 0", role="participant"), Speaker(label="Speaker 1", role="owner")],
+    segments=[
+        Segment(id="live-1", text="Back to the budget, can we cut paid ads?", speakerLabel="Speaker 0",
+                start=at("11:05:43"), end=at("11:05:47")),
+    ],
+)
 part_two_transcript = Transcript(
     recordingId="rec-b",
     revision="rev-1",
+    status="final",
     createdAt=at("11:30:00"),
     model="deepgram-nova-3",
     # Diarization numbered the voices the other way round in this file.
@@ -304,14 +323,18 @@ bundle = CaptureBundle(
     range=TimeRange(start=datetime(2026, 11, 14, 0, 0, tzinfo=timezone.utc),
                     end=datetime(2026, 11, 15, 0, 0, tzinfo=timezone.utc)),
     timezone="Europe/London",
+    ownerPersonId="person-sam",
     sources=[pendant, laptop],
     recordings=[tv, tv_copy, part_one, part_two],
-    transcripts=[tv_transcript, part_one_rev1, part_one_rev2, part_two_transcript],
+    transcripts=[tv_transcript, part_one_rev1, part_one_rev2, part_two_live, part_two_transcript],
     corrections=[venue_fix],
     fragments=fragments,
     screenObservations=[screen],
     gaps=[CaptureGap(id="gap-1", sourceId=pendant.id, range=span("07:48:10", "10:06:42"),
-                     cause="not_recording")],
+                     cause="not_recording"),
+          # The user erased one minute of the TV recording: the words are gone, the range stays known.
+          CaptureGap(id="gap-2", sourceId=pendant.id, recordingId="rec-tv",
+                     range=span("07:20:00", "07:21:00"), cause="excluded")],
     links=links,
     conversations=[conversation, plumber_call],
     entities=[alex, launch, venue_task],

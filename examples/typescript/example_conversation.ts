@@ -7,6 +7,8 @@
  * - A Fact keeps what was decided, with an EvidenceRef as proof.
  * - Diarization swapped the labels between files; Participant.speakerRefs maps both.
  * - Screen activity during the conversation is attached as context.
+ * - A live (provisional) transcript is followed by a final one; the audio location is
+ *   Recording.audio; an erased range inside one recording is a CaptureGap with recordingId.
  *
  * The Python example covers more cases (duplicates, TV audio, gaps, threads).
  */
@@ -30,6 +32,7 @@ const recordings: Recording[] = [
     origin: 'recovered',
     startReason: 'silence',
     endReason: 'file_boundary',
+    audio: { uri: 's3://example-bucket/audio/rec-a.opus', format: 'opus' },
     currentTranscriptRevision: 'rev-1',
   },
   {
@@ -46,9 +49,26 @@ const recordings: Recording[] = [
 
 // One reading of each recording. A better model later adds a new revision; this one is kept.
 const transcripts: Transcript[] = [
+  // A live draft of rec-a, written while it was recorded. It was replaceable until rev-1 (final) existed.
+  {
+    recordingId: 'rec-a',
+    revision: 'live-1',
+    status: 'provisional',
+    createdAt: '2026-11-14T10:54:40Z',
+    segments: [
+      {
+        id: 'live-a-1',
+        text: 'Shall we look at the launch budget',
+        speakerLabel: 'Speaker 0',
+        start: '2026-11-14T10:54:25Z',
+        end: '2026-11-14T10:54:28Z',
+      },
+    ],
+  },
   {
     recordingId: 'rec-a',
     revision: 'rev-1',
+    status: 'final',
     createdAt: '2026-11-14T11:30:00Z',
     speakers: [
       { label: 'Speaker 0', role: 'owner', personId: 'person-sam' },
@@ -176,6 +196,7 @@ const bundle: CaptureBundle = {
   schemaVersion: '2.0.0',
   range: { start: '2026-11-14T00:00:00Z', end: '2026-11-15T00:00:00Z' },
   timezone: 'Europe/London',
+  ownerPersonId: 'person-sam',
   sources: [
     { id: 'omi-pendant', kind: 'wearable', modalities: ['audio_input'] },
     { id: 'laptop', kind: 'desktop', modalities: ['screen'] },
@@ -183,6 +204,16 @@ const bundle: CaptureBundle = {
   recordings,
   transcripts,
   screenObservations: [screen],
+  // The user erased a minute of rec-a: no words, but the range stays known.
+  gaps: [
+    {
+      id: 'gap-erased',
+      sourceId: 'omi-pendant',
+      recordingId: 'rec-a',
+      range: { start: '2026-11-14T10:58:00Z', end: '2026-11-14T10:59:00Z' },
+      cause: 'excluded',
+    },
+  ],
   links: [cut],
   conversations: [conversation],
   entities: [{ id: 'project-launch', kind: 'project', name: 'Launch' }],

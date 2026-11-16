@@ -180,6 +180,9 @@
           "type": "string",
           "description": "Hash of the audio content, used to detect the same audio stored twice"
         },
+        "audio": {
+          "$ref": "#/definitions/AudioRef"
+        },
         "currentTranscriptRevision": {
           "type": "string",
           "description": "Transcript.revision to use by default. Older revisions are kept."
@@ -196,10 +199,29 @@
       ],
       "additionalProperties": false
     },
+    "AudioRef": {
+      "type": "object",
+      "title": "AudioRef",
+      "description": "Where the audio of one recording is stored. It is a pointer only: removing it (an erase, or a pruned file) leaves the rest of the Recording as it was. The hash of the audio is Recording.contentHash.",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "description": "Location of the audio file, e.g. 's3://example-bucket/audio/rec-a.opus'"
+        },
+        "format": {
+          "type": "string",
+          "description": "Audio format, e.g. 'opus', 'wav' or 'mp3'"
+        }
+      },
+      "required": [
+        "uri"
+      ],
+      "additionalProperties": false
+    },
     "Transcript": {
       "type": "object",
       "title": "Transcript",
-      "description": "One reading of a recording by a transcription model. A transcript is never overwritten: a better model or new speaker labels make a new revision. Segment ids are only stable within one revision, so other types point at a time range of the recording, not at segment ids.",
+      "description": "One reading of a recording by a transcription model. A transcript is never overwritten: a better model or new speaker labels make a new revision. The one exception is a provisional revision (a live transcript that grows while the recording is still being made): it may be replaced in place until a final revision of the recording exists, and is frozen after that. Segment ids are only stable within one revision, so other types point at a time range of the recording, not at segment ids.",
       "properties": {
         "recordingId": {
           "type": "string",
@@ -213,6 +235,9 @@
           "type": "string",
           "format": "date-time",
           "description": "When this revision was made (UTC)"
+        },
+        "status": {
+          "$ref": "#/definitions/TranscriptStatus"
         },
         "model": {
           "type": "string",
@@ -769,6 +794,10 @@
           "type": "string",
           "description": "CaptureSource.id"
         },
+        "recordingId": {
+          "type": "string",
+          "description": "Recording.id the gap is inside, e.g. a range erased from one recording. Not set: the gap is between recordings."
+        },
         "range": {
           "$ref": "#/definitions/TimeRange"
         },
@@ -1085,6 +1114,10 @@
           "type": "string",
           "description": "IANA timezone used to define the span, e.g. 'Europe/London'"
         },
+        "ownerPersonId": {
+          "type": "string",
+          "description": "Whose capture this is: the personId of the owner (the person with Speaker role owner)"
+        },
         "sources": {
           "type": "array",
           "items": {
@@ -1278,6 +1311,15 @@
         "audio_session",
         "calendar",
         "manual"
+      ]
+    },
+    "TranscriptStatus": {
+      "type": "string",
+      "title": "TranscriptStatus",
+      "description": "provisional: a live draft that may still change and may be replaced in place. final: complete; never changed. Not set means final.",
+      "enum": [
+        "provisional",
+        "final"
       ]
     },
     "GapCause": {
