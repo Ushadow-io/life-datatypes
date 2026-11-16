@@ -1,13 +1,106 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Life Conversation Data Types",
-  "description": "Shared conversation schema for ASR, NLP, and conversation analysis across the Ushadow ecosystem",
-  "version": "1.0.0",
+  "title": "Life Data Types",
+  "description": "Shared schema for captured life evidence (audio recordings, transcripts, screen activity), the conversations derived from it, and the facts and entities taken from those conversations, across the Ushadow ecosystem. All times are absolute UTC so evidence from different recordings and devices can be lined up. Evidence is never overwritten: a correction is a new record.",
+  "version": "2.0.0",
   "definitions": {
+    "TimeRange": {
+      "type": "object",
+      "title": "TimeRange",
+      "description": "An absolute UTC interval. end must not be before start.",
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Start (ISO 8601, UTC)"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time",
+          "description": "End (ISO 8601, UTC)"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
+    },
+    "CaptureSource": {
+      "type": "object",
+      "title": "CaptureSource",
+      "description": "A device or channel that produces evidence, e.g. an Omi pendant, a phone microphone, or a desktop screen recorder.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier for this source"
+        },
+        "kind": {
+          "$ref": "#/definitions/SourceKind"
+        },
+        "modalities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Modality"
+          },
+          "description": "What this source captures. audio_input is a microphone; audio_output is system audio (always media, never the owner speaking)."
+        },
+        "device": {
+          "type": "string",
+          "description": "Device model or name"
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable name"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Source-specific extensions"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "Speaker": {
+      "type": "object",
+      "title": "Speaker",
+      "description": "A voice heard in one recording. label is local to that recording: 'Speaker 0' in two recordings may be different people. personId is set only once voice recognition or a human has identified who it is.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Diarization label, unique within the recording"
+        },
+        "personId": {
+          "type": "string",
+          "description": "Stable identity across recordings, if known"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Name to show, if known"
+        },
+        "role": {
+          "$ref": "#/definitions/SpeakerRole"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence in role and personId (0-1)"
+        }
+      },
+      "required": [
+        "label",
+        "role"
+      ],
+      "additionalProperties": false
+    },
     "Segment": {
       "type": "object",
       "title": "Segment",
-      "description": "A contiguous transcribed text from a speaker with timing metadata",
+      "description": "One line of transcript: contiguous speech from one speaker, delimited by speaker change or pause. The atomic unit of a recording.",
       "properties": {
         "id": {
           "type": "string",
@@ -15,83 +108,355 @@
         },
         "text": {
           "type": "string",
-          "description": "Transcribed text content"
+          "description": "Transcribed text"
         },
-        "speaker": {
+        "speakerLabel": {
           "type": "string",
-          "description": "Speaker identifier or name"
+          "description": "Speaker.label within the same recording"
         },
         "start": {
-          "type": "number",
-          "description": "Start time in seconds"
+          "type": "string",
+          "format": "date-time",
+          "description": "Absolute start (ISO 8601, UTC)"
         },
         "end": {
-          "type": "number",
-          "description": "End time in seconds"
+          "type": "string",
+          "format": "date-time",
+          "description": "Absolute end (ISO 8601, UTC)"
         },
         "confidence": {
           "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "description": "ASR confidence score (0-1)"
+          "description": "ASR confidence (0-1)"
         },
         "language": {
           "type": "string",
-          "description": "Language code (e.g., 'en', 'es', 'fr')"
+          "description": "Language code, e.g. 'en'"
         },
         "metadata": {
           "type": "object",
           "description": "Provider-specific extensions (Deepgram, Whisper, etc.)"
         }
       },
-      "required": ["id", "text", "speaker", "start", "end"],
+      "required": [
+        "id",
+        "text",
+        "speakerLabel",
+        "start",
+        "end"
+      ],
       "additionalProperties": false
+    },
+    "Recording": {
+      "type": "object",
+      "title": "Recording",
+      "description": "One continuous piece of captured audio. A recording is how the audio was cut (silence, button press, disconnect, file size), not what happened. One conversation can span several recordings, and one recording can hold parts of several conversations. range is the absolute bounds of the audio; startReason and endReason say why each edge is where it is. The words are in Transcript: one recording can have several.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this recording"
+        },
+        "sourceId": {
+          "type": "string",
+          "description": "CaptureSource.id that produced it"
+        },
+        "modality": {
+          "$ref": "#/definitions/AudioModality"
+        },
+        "range": {
+          "$ref": "#/definitions/TimeRange"
+        },
+        "origin": {
+          "$ref": "#/definitions/RecordingOrigin"
+        },
+        "startReason": {
+          "$ref": "#/definitions/CutReason"
+        },
+        "endReason": {
+          "$ref": "#/definitions/CutReason"
+        },
+        "contentHash": {
+          "type": "string",
+          "description": "Hash of the audio content, used to detect the same audio stored twice"
+        },
+        "currentTranscriptRevision": {
+          "type": "string",
+          "description": "Transcript.revision to use by default. Older revisions are kept."
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Recording-level extensions"
+        }
+      },
+      "required": [
+        "id",
+        "sourceId",
+        "range"
+      ],
+      "additionalProperties": false
+    },
+    "Transcript": {
+      "type": "object",
+      "title": "Transcript",
+      "description": "One reading of a recording by a transcription model. A transcript is never overwritten: a better model or new speaker labels make a new revision. Segment ids are only stable within one revision, so other types point at a time range of the recording, not at segment ids.",
+      "properties": {
+        "recordingId": {
+          "type": "string",
+          "description": "Recording.id this is a reading of"
+        },
+        "revision": {
+          "type": "string",
+          "description": "Identifies this version, unique within the recording"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this revision was made (UTC)"
+        },
+        "model": {
+          "type": "string",
+          "description": "Transcription and diarization model, e.g. 'deepgram-nova-3'"
+        },
+        "speakers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Speaker"
+          },
+          "description": "Every speaker label used by segments"
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Segment"
+          },
+          "description": "All segments in chronological order"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Provider-specific extensions"
+        }
+      },
+      "required": [
+        "recordingId",
+        "revision",
+        "createdAt",
+        "segments"
+      ],
+      "additionalProperties": false
+    },
+    "TranscriptCorrection": {
+      "type": "object",
+      "title": "TranscriptCorrection",
+      "description": "A human fix to what a recording says, for one time range: the right words, the right speaker, or both. It is applied on top of every transcript revision, so a new transcription does not undo it.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this correction"
+        },
+        "recordingId": {
+          "type": "string",
+          "description": "Recording.id"
+        },
+        "range": {
+          "$ref": "#/definitions/TimeRange"
+        },
+        "text": {
+          "type": "string",
+          "description": "The correct words for the range"
+        },
+        "speakerLabel": {
+          "type": "string",
+          "description": "The correct Speaker.label for the range"
+        },
+        "personId": {
+          "type": "string",
+          "description": "The correct person for the range, if known"
+        },
+        "author": {
+          "type": "string",
+          "description": "Who made the correction"
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the correction was made (UTC)"
+        }
+      },
+      "required": [
+        "id",
+        "recordingId",
+        "range",
+        "recordedAt"
+      ],
+      "additionalProperties": false
+    },
+    "EvidenceRef": {
+      "type": "object",
+      "title": "EvidenceRef",
+      "description": "A pointer to proof: a time range of one recording. The range is the anchor and stays valid for every transcript revision. quote is the exact words read from transcriptRevision, kept for display and for re-checking after a new transcription.",
+      "properties": {
+        "recordingId": {
+          "type": "string",
+          "description": "Recording.id"
+        },
+        "range": {
+          "$ref": "#/definitions/TimeRange"
+        },
+        "transcriptRevision": {
+          "type": "string",
+          "description": "Transcript.revision the quote was read from"
+        },
+        "quote": {
+          "type": "string",
+          "description": "Exact words in the range"
+        }
+      },
+      "required": [
+        "recordingId",
+        "range"
+      ],
+      "additionalProperties": false
+    },
+    "CutReason": {
+      "type": "string",
+      "title": "CutReason",
+      "description": "Why a recording edge is where it is. Edges caused by silence, file_boundary, disconnect or size_limit are often not the end of a real conversation.",
+      "enum": [
+        "silence",
+        "user_action",
+        "disconnect",
+        "file_boundary",
+        "size_limit",
+        "meeting_boundary",
+        "capture_start",
+        "unknown"
+      ]
     },
     "Fragment": {
       "type": "object",
       "title": "Fragment",
-      "description": "A topic-linked group of consecutive segments (e.g., discussion of a specific subject). Must reference adjacent segments in timeline.",
+      "description": "A run of consecutive speech in one recording about one subject. A recording that changes subject without a pause yields several fragments. range is the anchor: it stays valid when the recording is transcribed again. segmentIds is optional and only valid for transcriptRevision.",
       "properties": {
         "id": {
           "type": "string",
           "description": "Unique identifier for this fragment"
         },
-        "text": {
+        "recordingId": {
           "type": "string",
-          "description": "Fragment text content (combined from consecutive segments)"
+          "description": "Recording.id the segments belong to"
+        },
+        "transcriptRevision": {
+          "type": "string",
+          "description": "Transcript.revision the segment ids refer to"
         },
         "segmentIds": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "References to consecutive segment IDs in this fragment (must be adjacent in the timeline)"
+          "minItems": 1,
+          "description": "Consecutive segment ids in transcriptRevision, in order. Optional."
         },
-        "type": {
+        "range": {
+          "$ref": "#/definitions/TimeRange"
+        },
+        "topic": {
           "type": "string",
-          "enum": ["sentence", "clause", "turn", "utterance", "other"],
-          "description": "Fragment classification"
+          "description": "Short topic label"
         },
-        "start": {
-          "type": "number",
-          "description": "Start time in seconds (from first segment)"
-        },
-        "end": {
-          "type": "number",
-          "description": "End time in seconds (from last segment)"
+        "summary": {
+          "type": "string",
+          "description": "One or two sentences on what was said"
         },
         "metadata": {
           "type": "object",
-          "description": "Fragment-specific metadata (topic tags, sentiment, etc.)"
+          "description": "Tags, sentiment, etc."
         }
       },
-      "required": ["id", "text", "segmentIds", "type"],
+      "required": [
+        "id",
+        "recordingId",
+        "range"
+      ],
+      "additionalProperties": false
+    },
+    "SpeakerRef": {
+      "type": "object",
+      "title": "SpeakerRef",
+      "description": "Points to one speaker label in one recording.",
+      "properties": {
+        "recordingId": {
+          "type": "string"
+        },
+        "speakerLabel": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "recordingId",
+        "speakerLabel"
+      ],
+      "additionalProperties": false
+    },
+    "Participant": {
+      "type": "object",
+      "title": "Participant",
+      "description": "One person in a conversation. Because speaker labels are local to a recording, the same person may appear as 'Speaker 0' in one recording and 'Speaker 1' in the next; speakerRefs records every label that is this person.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier, unique within the conversation"
+        },
+        "personId": {
+          "type": "string",
+          "description": "Stable identity across conversations, if known"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Name to show, if known"
+        },
+        "role": {
+          "$ref": "#/definitions/SpeakerRole"
+        },
+        "speakerRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SpeakerRef"
+          },
+          "description": "Every recording-local label that is this participant"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "speakerRefs"
+      ],
+      "additionalProperties": false
+    },
+    "ConversationPart": {
+      "type": "object",
+      "title": "ConversationPart",
+      "description": "The part of one recording that belongs to a conversation. The time between consecutive parts is a pause in the conversation.",
+      "properties": {
+        "recordingId": {
+          "type": "string",
+          "description": "Recording.id"
+        },
+        "range": {
+          "$ref": "#/definitions/TimeRange"
+        }
+      },
+      "required": [
+        "recordingId",
+        "range"
+      ],
       "additionalProperties": false
     },
     "Thread": {
       "type": "object",
       "title": "Thread",
-      "description": "A topical or narrative thread spanning multiple fragments",
+      "description": "A subject that runs through a conversation, possibly with interruptions. Its fragments need not be consecutive and may come from different recordings of the same conversation.",
       "properties": {
         "id": {
           "type": "string",
@@ -101,106 +466,854 @@
           "type": "string",
           "description": "Thread title or topic"
         },
-        "description": {
+        "summary": {
           "type": "string",
-          "description": "Detailed description of the thread content"
+          "description": "What the thread covers"
         },
         "fragmentIds": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "Ordered list of fragment IDs in this thread"
+          "minItems": 1,
+          "description": "Fragment ids in chronological order"
         },
-        "participants": {
+        "participantIds": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "Speakers involved in this thread"
-        },
-        "startTime": {
-          "type": "number",
-          "description": "Thread start time (seconds)"
-        },
-        "endTime": {
-          "type": "number",
-          "description": "Thread end time (seconds)"
+          "description": "Participant.id values from the same conversation"
         },
         "metadata": {
           "type": "object",
-          "description": "Thread-specific metadata (topic tags, sentiment, importance)"
+          "description": "Tags, sentiment, importance"
         }
       },
-      "required": ["id", "title", "fragmentIds"],
+      "required": [
+        "id",
+        "title",
+        "fragmentIds"
+      ],
       "additionalProperties": false
     },
     "Conversation": {
       "type": "object",
       "title": "Conversation",
-      "description": "Time-bounded dialog with segments (atomic units), fragments (consecutive topic-linked segments), and threads (topic-grouped fragments)",
+      "description": "A time-bounded exchange between people. It can contain pauses, so it is made of one or more parts, each claiming an interval of a recording. Recordings are referenced, not copied. range runs from the start of the first part to the end of the last part, pauses included.",
       "properties": {
         "id": {
           "type": "string",
           "description": "Unique identifier for this conversation"
         },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Starts at 1. Goes up each time late evidence, a correction or a new Link changes the conversation. The id stays the same."
+        },
+        "closedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the conversation was closed (UTC). Not set while it is still open."
+        },
         "title": {
           "type": "string",
           "description": "Conversation title or meeting name"
         },
-        "description": {
+        "summary": {
           "type": "string",
-          "description": "Conversation summary or description"
+          "description": "What the conversation was about"
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EvidenceRef"
+          },
+          "description": "Proof for the claims in title and summary"
+        },
+        "range": {
+          "$ref": "#/definitions/TimeRange"
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ConversationPart"
+          },
+          "minItems": 1,
+          "description": "Recording intervals in chronological order; gaps between them are pauses"
         },
         "participants": {
           "type": "array",
           "items": {
+            "$ref": "#/definitions/Participant"
+          },
+          "description": "Everyone heard, including media and background voices with their role"
+        },
+        "fragmentIds": {
+          "type": "array",
+          "items": {
             "type": "string"
           },
-          "description": "List of all participant identifiers"
-        },
-        "startTime": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Conversation start timestamp (ISO 8601)"
-        },
-        "endTime": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Conversation end timestamp (ISO 8601)"
-        },
-        "duration": {
-          "type": "number",
-          "description": "Total duration in seconds"
-        },
-        "segments": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/Segment"
-          },
-          "description": "All segments in chronological order (atomic timeline units)"
-        },
-        "fragments": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/Fragment"
-          },
-          "description": "Topic-grouped collections of consecutive segments"
+          "description": "Fragments inside the parts, in chronological order"
         },
         "threads": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/Thread"
           },
-          "description": "Broader topic groupings of fragments (may be non-consecutive)"
+          "description": "Subjects that recur within the conversation"
+        },
+        "screenObservationIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Screen activity that overlapped the conversation, as context"
+        },
+        "meetingId": {
+          "type": "string",
+          "description": "MeetingMarker.id, when a meeting app defined the bounds"
+        },
+        "entityRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EntityRef"
+          },
+          "description": "People, projects, tasks, places and organisations the conversation is about"
         },
         "metadata": {
           "type": "object",
-          "description": "Conversation-level metadata (source, quality, tags)"
+          "description": "Conversation-level extensions"
         }
       },
-      "required": ["id", "title", "participants", "startTime", "segments"],
+      "required": [
+        "id",
+        "revision",
+        "range",
+        "parts"
+      ],
       "additionalProperties": false
+    },
+    "FrameRef": {
+      "type": "object",
+      "title": "FrameRef",
+      "description": "A pointer to one screen frame. The capture device keeps the full frame store and may prune it, so a frame can stop being available.",
+      "properties": {
+        "frameId": {
+          "type": "string",
+          "description": "Identifier in the capture device's frame store"
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the frame was captured (UTC)"
+        },
+        "availability": {
+          "$ref": "#/definitions/FrameAvailability"
+        },
+        "mediaUri": {
+          "type": "string",
+          "description": "Where the uploaded copy is stored"
+        }
+      },
+      "required": [
+        "frameId",
+        "capturedAt"
+      ],
+      "additionalProperties": false
+    },
+    "ScreenSample": {
+      "type": "object",
+      "title": "ScreenSample",
+      "description": "A snapshot of what was on screen at one moment inside an observation. frame is the frame the sample came from, if any.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this sample"
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When it was taken (UTC)"
+        },
+        "trigger": {
+          "$ref": "#/definitions/ScreenTrigger"
+        },
+        "textSource": {
+          "$ref": "#/definitions/TextSource"
+        },
+        "text": {
+          "type": "string",
+          "description": "Visible text, bounded"
+        },
+        "frame": {
+          "$ref": "#/definitions/FrameRef"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Sample-specific extensions"
+        }
+      },
+      "required": [
+        "id",
+        "capturedAt"
+      ],
+      "additionalProperties": false
+    },
+    "ScreenObservation": {
+      "type": "object",
+      "title": "ScreenObservation",
+      "description": "A period of continuous screen context: one application, window and URL, from switch-in to switch-out. Like a recording, it is a capture unit, not an event: one observation can hold several activities (two game matches) and one activity can span several observations. range runs from switch-in to switch-out.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this observation"
+        },
+        "sourceId": {
+          "type": "string",
+          "description": "CaptureSource.id of the desktop"
+        },
+        "range": {
+          "$ref": "#/definitions/TimeRange"
+        },
+        "state": {
+          "$ref": "#/definitions/ScreenState"
+        },
+        "appName": {
+          "type": "string",
+          "description": "Focused application, if known (some windows report none)"
+        },
+        "windowTitle": {
+          "type": "string",
+          "description": "Focused window title, if known"
+        },
+        "url": {
+          "type": "string",
+          "description": "Browser URL, when the app is a browser"
+        },
+        "samples": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ScreenSample"
+          },
+          "description": "Snapshots in chronological order"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FrameRef"
+          },
+          "description": "Candidate frames spread across the observation, for choosing a representative image"
+        },
+        "representativeFrameId": {
+          "type": "string",
+          "description": "FrameRef.frameId chosen to represent the observation"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Observation-specific extensions"
+        }
+      },
+      "required": [
+        "id",
+        "sourceId",
+        "range"
+      ],
+      "additionalProperties": false
+    },
+    "MeetingMarker": {
+      "type": "object",
+      "title": "MeetingMarker",
+      "description": "A meeting detected from a machine signal (a meeting app holding the microphone, a calendar entry). The strongest evidence of where a conversation starts and ends.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this meeting"
+        },
+        "sourceId": {
+          "type": "string",
+          "description": "CaptureSource.id that detected it"
+        },
+        "range": {
+          "$ref": "#/definitions/TimeRange"
+        },
+        "app": {
+          "type": "string",
+          "description": "Meeting application, e.g. 'zoom', 'browser-call'"
+        },
+        "title": {
+          "type": "string",
+          "description": "Meeting title, if the app or calendar provides one"
+        },
+        "detectedBy": {
+          "$ref": "#/definitions/MeetingDetector"
+        }
+      },
+      "required": [
+        "id",
+        "range",
+        "detectedBy"
+      ],
+      "additionalProperties": false
+    },
+    "CaptureGap": {
+      "type": "object",
+      "title": "CaptureGap",
+      "description": "An interval when a source recorded nothing. Distinguishes 'nothing was captured' from 'captured, but nothing happened'.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this gap"
+        },
+        "sourceId": {
+          "type": "string",
+          "description": "CaptureSource.id"
+        },
+        "range": {
+          "$ref": "#/definitions/TimeRange"
+        },
+        "cause": {
+          "$ref": "#/definitions/GapCause"
+        }
+      },
+      "required": [
+        "id",
+        "sourceId",
+        "range",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "Link": {
+      "type": "object",
+      "title": "Link",
+      "description": "A decided relation between two items (recordings, fragments, observations or conversations), or a decided cut inside one recording (split_at). Storing the decision lets a later run reuse it instead of deciding again: a run looks up key first. A Link is never changed. To override one, add a new Link whose retracts is the old id. A human Link wins over a rule or model Link.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this link"
+        },
+        "kind": {
+          "$ref": "#/definitions/LinkKind"
+        },
+        "fromId": {
+          "type": "string",
+          "description": "Earlier item id"
+        },
+        "toId": {
+          "type": "string",
+          "description": "Later item id. Not set for split_at."
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "split_at only: the time of the cut (UTC)"
+        },
+        "key": {
+          "type": "string",
+          "description": "Identity of the question that was decided, e.g. a hash of kind, fromId, toId or at, and policyVersion. Two Links with the same key answer the same question."
+        },
+        "decidedBy": {
+          "$ref": "#/definitions/Decider"
+        },
+        "policyVersion": {
+          "type": "string",
+          "description": "Version of the rules or prompt that decided it"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model that decided it, when decidedBy is model"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence in the decision (0-1)"
+        },
+        "gapSeconds": {
+          "type": "number",
+          "description": "Time between the end of fromId and the start of toId; negative when they overlap"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Short explanation"
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the decision was made (UTC)"
+        },
+        "retracts": {
+          "type": "string",
+          "description": "Link.id that this Link overrides"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "fromId",
+        "key",
+        "decidedBy",
+        "recordedAt"
+      ],
+      "additionalProperties": false
+    },
+    "EntityKind": {
+      "type": "string",
+      "title": "EntityKind",
+      "description": "What kind of thing an entity is",
+      "enum": [
+        "person",
+        "project",
+        "task",
+        "place",
+        "org"
+      ]
+    },
+    "Entity": {
+      "type": "object",
+      "title": "Entity",
+      "description": "A person, project, task, place or organisation that conversations and facts are about. 'These two names are the same entity' is a Fact with key same_entity, not an edit of this record.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier"
+        },
+        "kind": {
+          "$ref": "#/definitions/EntityKind"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name to show"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Other names for the same entity"
+        },
+        "confirmed": {
+          "type": "boolean",
+          "description": "false for a bystander: no profile is kept until the user confirms the entity"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Entity-specific extensions"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "EntityRef": {
+      "type": "object",
+      "title": "EntityRef",
+      "description": "Points to one entity, with enough to show it without a lookup.",
+      "properties": {
+        "entityId": {
+          "type": "string",
+          "description": "Entity.id"
+        },
+        "kind": {
+          "$ref": "#/definitions/EntityKind"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name to show"
+        }
+      },
+      "required": [
+        "entityId"
+      ],
+      "additionalProperties": false
+    },
+    "FactSource": {
+      "type": "string",
+      "title": "FactSource",
+      "description": "Who said so. person: a human. agent: a model. sensor: a rule or a capture system. Same meaning as Decider: human = person, model = agent, rule = sensor.",
+      "enum": [
+        "person",
+        "agent",
+        "sensor"
+      ]
+    },
+    "Direction": {
+      "type": "string",
+      "title": "Direction",
+      "description": "For a promise: who owes whom, seen from the owner",
+      "enum": [
+        "owed_by_me",
+        "owed_to_me"
+      ]
+    },
+    "Sensitivity": {
+      "type": "string",
+      "title": "Sensitivity",
+      "description": "How private the content is. Used to decide which agents may read it.",
+      "enum": [
+        "normal",
+        "private",
+        "health",
+        "finance"
+      ]
+    },
+    "FactSubject": {
+      "type": "object",
+      "title": "FactSubject",
+      "description": "What a fact is about: one entity, task or conversation.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "Kind of subject, e.g. 'task', 'person', 'conversation'"
+        },
+        "id": {
+          "type": "string",
+          "description": "Identifier of the subject"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "FactValue": {
+      "type": "object",
+      "title": "FactValue",
+      "description": "The content of a fact. The named fields are the shared ones; a key may add its own.",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The fact in one sentence"
+        },
+        "about": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Entity.id values the fact mentions"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EvidenceRef"
+          },
+          "description": "Proof. Required in practice when source is agent."
+        },
+        "direction": {
+          "$ref": "#/definitions/Direction"
+        },
+        "due": {
+          "type": "string",
+          "description": "When it is due: a date or a date-time (ISO 8601)"
+        },
+        "sensitivity": {
+          "$ref": "#/definitions/Sensitivity"
+        }
+      },
+      "additionalProperties": true
+    },
+    "Fact": {
+      "type": "object",
+      "title": "Fact",
+      "description": "Something that was said or done, kept for ever. Same shape as a taskfacts fact (ushadow_facts). A fact is never changed and has no status: whether it still counts is worked out from retractions and newer facts. key says what happened, as a thing plus a past verb (task_requested, promise_made, decision_made, constraint_added, preference_stated, question_opened, done_reported, same_entity, correction, forget, erased). It never names a status.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier, fixed for ever"
+        },
+        "subject": {
+          "$ref": "#/definitions/FactSubject"
+        },
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "What happened, in snake_case"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When it was said or done in the world (UTC). For speech, the recording time."
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When we learned it (UTC)"
+        },
+        "value": {
+          "$ref": "#/definitions/FactValue"
+        },
+        "source": {
+          "$ref": "#/definitions/FactSource"
+        },
+        "scope": {
+          "type": "string",
+          "description": "Who can see it. Not set: everyone the owner allows."
+        },
+        "retracts": {
+          "type": "string",
+          "description": "Fact.id of a fact that was wrong"
+        }
+      },
+      "required": [
+        "id",
+        "subject",
+        "key",
+        "occurredAt",
+        "recordedAt",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "CaptureBundle": {
+      "type": "object",
+      "title": "CaptureBundle",
+      "description": "Evidence, derived structure and facts for one time span (for example one local day), with every item referenced by id.",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "description": "Version of this schema, e.g. '2.0.0'"
+        },
+        "range": {
+          "$ref": "#/definitions/TimeRange"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "IANA timezone used to define the span, e.g. 'Europe/London'"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CaptureSource"
+          }
+        },
+        "recordings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Recording"
+          }
+        },
+        "transcripts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Transcript"
+          }
+        },
+        "corrections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TranscriptCorrection"
+          }
+        },
+        "fragments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Fragment"
+          }
+        },
+        "screenObservations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ScreenObservation"
+          }
+        },
+        "meetings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MeetingMarker"
+          }
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CaptureGap"
+          }
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Link"
+          }
+        },
+        "conversations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Conversation"
+          }
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Entity"
+          }
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Fact"
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "range"
+      ],
+      "additionalProperties": false
+    },
+    "SourceKind": {
+      "type": "string",
+      "title": "SourceKind",
+      "description": "What kind of device or channel produces the evidence",
+      "enum": [
+        "wearable",
+        "phone",
+        "desktop",
+        "upload",
+        "import",
+        "other"
+      ]
+    },
+    "Modality": {
+      "type": "string",
+      "title": "Modality",
+      "description": "What a source captures. audio_input is a microphone; audio_output is system audio (always media, never the owner speaking).",
+      "enum": [
+        "audio_input",
+        "audio_output",
+        "screen",
+        "photo"
+      ]
+    },
+    "SpeakerRole": {
+      "type": "string",
+      "title": "SpeakerRole",
+      "description": "owner: the person wearing or using the device. participant: someone talking with them. media: TV, radio, video, podcast. background: nearby speech not addressed to the owner. unknown: not decided.",
+      "enum": [
+        "owner",
+        "participant",
+        "media",
+        "background",
+        "unknown"
+      ]
+    },
+    "AudioModality": {
+      "type": "string",
+      "title": "AudioModality",
+      "description": "Microphone (audio_input) or system audio (audio_output)",
+      "enum": [
+        "audio_input",
+        "audio_output"
+      ]
+    },
+    "RecordingOrigin": {
+      "type": "string",
+      "title": "RecordingOrigin",
+      "description": "live: streamed as it happened. recovered: downloaded later from device storage. upload: a file the user added. import: a historical backfill.",
+      "enum": [
+        "live",
+        "recovered",
+        "upload",
+        "import"
+      ]
+    },
+    "FrameAvailability": {
+      "type": "string",
+      "title": "FrameAvailability",
+      "description": "local: only on the capture device. uploaded: a copy is stored centrally (see mediaUri). pruned: no longer available anywhere.",
+      "enum": [
+        "local",
+        "uploaded",
+        "pruned"
+      ]
+    },
+    "ScreenTrigger": {
+      "type": "string",
+      "title": "ScreenTrigger",
+      "description": "What caused the sample",
+      "enum": [
+        "open",
+        "interaction",
+        "typing_pause",
+        "scroll",
+        "clipboard",
+        "visual_change",
+        "liveness",
+        "manual",
+        "close"
+      ]
+    },
+    "TextSource": {
+      "type": "string",
+      "title": "TextSource",
+      "description": "accessibility text is structured and reliable; ocr is a fallback for windows without an accessibility tree",
+      "enum": [
+        "accessibility",
+        "ocr",
+        "hybrid",
+        "none"
+      ]
+    },
+    "ScreenState": {
+      "type": "string",
+      "title": "ScreenState",
+      "description": "What the user was doing with the screen",
+      "enum": [
+        "active",
+        "idle",
+        "locked",
+        "media_playback",
+        "blank"
+      ]
+    },
+    "MeetingDetector": {
+      "type": "string",
+      "title": "MeetingDetector",
+      "description": "Which signal detected the meeting",
+      "enum": [
+        "recorder",
+        "audio_session",
+        "calendar",
+        "manual"
+      ]
+    },
+    "GapCause": {
+      "type": "string",
+      "title": "GapCause",
+      "description": "Why nothing was captured. excluded means the user chose not to keep it, including a range the user erased later.",
+      "enum": [
+        "device_offline",
+        "disconnected",
+        "paused",
+        "excluded",
+        "not_recording",
+        "unknown"
+      ]
+    },
+    "LinkKind": {
+      "type": "string",
+      "title": "LinkKind",
+      "description": "continues: toId carries on the same conversation or activity after a pause or cut. duplicate_of: toId is the same capture stored again. overlaps: both captured the same moment from different sources (e.g. phone and pendant). unrelated: checked, and not the same event. split_at: fromId is a recording that holds the end of one conversation and the start of the next; the cut is at Link.at.",
+      "enum": [
+        "continues",
+        "duplicate_of",
+        "overlaps",
+        "unrelated",
+        "split_at"
+      ]
+    },
+    "Decider": {
+      "type": "string",
+      "title": "Decider",
+      "description": "Who made the decision. A human decision is never overwritten by a rule or model.",
+      "enum": [
+        "rule",
+        "model",
+        "human"
+      ]
     }
   }
 }

@@ -4,8 +4,8 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "life-datatypes"
-version = "1.0.0"
-description = "Shared conversation data types for the Ushadow ecosystem"
+version = "2.0.0"
+description = "Shared capture and conversation data types for the Ushadow ecosystem"
 authors = ["Ushadow Contributors <dev@ushadow.io>"]
 license = "MIT"
 readme = "README.md"
